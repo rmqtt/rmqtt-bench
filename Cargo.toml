@@ -13,8 +13,7 @@ name = "rmqtt-bench-v3"
 path = "src/main-v3.rs"
 
 [dependencies]
-#rust-box = "0.5"
-rust-box = { version = "0.5", path = "../../try-box/rust-box", features = ["event", "std-ext"] }
+rust-box = { version = "0.5", features = ["event", "std-ext"] }
 futures = "0.3"
 ntex-mqtt = "0.8"
 ntex = { version = "0.5", features = ["tokio", "rustls"] }
