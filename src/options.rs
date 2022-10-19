@@ -34,7 +34,7 @@ pub struct V3 {
     pub conn_interval: u64,
 
     /// Client id pattern, {no} - Connection Serial Number, {random} - The random number
-    #[structopt(name = "id-pattern", short = "r", long, default_value = "{no}")]
+    #[structopt(name = "id-pattern", short = "E", long, default_value = "{no}")]
     pub client_id_pattern: String,
 
     ///Username
