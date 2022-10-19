@@ -32,7 +32,7 @@ OPTIONS:
         --addrs <addrs>...                           MQTT broker endpoint list, "host1:port host2:port host3:port" [default: localhost:1883]
     -c, --conns <conns>                              The number of connections [default: 1000]
     -i, --interval <interval>                        Interval of connecting to the broker, millisecond [default: 0]
-    -r, --id-pattern <id-pattern>                    Client id pattern, {no} - Connection Serial Number, {random} - The random number [default: {no}]
+    -E, --id-pattern <id-pattern>                    Client id pattern, {no} - Connection Serial Number, {random} - The random number [default: {no}]
     -u, --username <username>                        Username
     -p, --password <password>                        Password
     -h, --handshake-timeout <handshake-timeout>      Handshake timeout, Seconds [default: 30]
@@ -69,19 +69,30 @@ $ rmqtt-bench v3 -c 25000
 
 For example, create 25K concurrent connections concurrently and subscribe
 ```rust
-rmqtt-bench v3 -c 25000 -S -t iot/{no}
+$ rmqtt-bench v3 -c 25000 -S -t iot/{no}
 ```
 
 ### Pub Benchmark
 
 For example, create 100 concurrent connections and publish messages concurrently
 ```rust
-rmqtt-bench v3 -c 100 -S -t iot/{no} -P
+$ rmqtt-bench v3 -c 100 -S -t iot/{no} -P
 ```
 
 For example, 100 concurrent connections are created and 1000 messages are published before exiting
 ```rust
-rmqtt-bench v3 -c 100 -S -t iot/{no} -P -l 1000
+$ rmqtt-bench v3 -c 100 -S -t iot/{no} -P -l 1000
+```
+
+### Sub and Pub Benchmark
+
+For example, create 10K concurrent connections concurrently and subscribe. 
+Then create 100 concurrent connections and publish messages to 10K connections
+```rust
+$ rmqtt-bench v3 -c 10000 -S -t iot/{no}
+```
+```rust
+$ rmqtt-bench v3 -c 100 --id-pattern pub-{no} -P -t iot/{no} -R 0 10000 -I 10
 ```
 
 ### Control Benchmark
@@ -90,7 +101,7 @@ Simple control, simulate real scenes.
 For example, 1000 concurrent connections are created at the same time, 
 and then 20% of the connections are disconnected or reconnected every second
 ```rust
-rmqtt-bench v3 -c 1000 -T -L 1000 -D 0.2
+$ rmqtt-bench v3 -c 1000 -T -L 1000 -D 0.2
 ```
 
 ### Script Benchmark
