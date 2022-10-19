@@ -60,16 +60,16 @@ OPTIONS:
 
 ### Connect Benchmark
 
-For example, create 50K concurrent connections concurrently
+For example, create 25K concurrent connections concurrently
 ```rust
-$ rmqtt-bench v3 -c 50000 
+$ rmqtt-bench v3 -c 25000 
 ```
 
 ### Sub Benchmark
 
-For example, create 50K concurrent connections concurrently and subscribe
+For example, create 25K concurrent connections concurrently and subscribe
 ```rust
-rmqtt-bench v3 -c 50000 -S -t iot/{no}
+rmqtt-bench v3 -c 25000 -S -t iot/{no}
 ```
 
 ### Pub Benchmark
@@ -105,6 +105,13 @@ Simulate real scenes through scripts
 
 ## Notice
 
+
+Make sure to increase resource usage limits and expand the port range like following on Linux.
+
+```rust
+ulimit -n 500000
+sudo sysctl -w net.ipv4.ip_local_port_range="1025 65534"
+```
 
 ## Author
 
