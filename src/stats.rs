@@ -11,6 +11,7 @@ pub struct Stats {
     pub recvs: Counter,
     pub sends: Counter,
     pub closeds: Counter,
+    pub last_err: RwLock<Option<String>>,
 }
 
 impl Stats {
@@ -23,7 +24,12 @@ impl Stats {
             recvs: Counter::new(),
             sends: Counter::new(),
             closeds: Counter::new(),
+            last_err: RwLock::new(None),
         })
+    }
+
+    pub fn set_last_err(&self, err: String) {
+        self.last_err.write().replace(err);
     }
 
     pub fn to_string(&self) -> String {
@@ -37,8 +43,8 @@ impl Stats {
         let sends = stats.sends.value();
         let sends_rate = stats.sends.rate();
         let closeds = stats.closeds.value();
-        format!("conns:{} {:0.2?}/s, conn_fails:{}, subs:{}, sends:{} {:0.2?}/s, recvs:{} {:0.2?}/s, closeds:{}",
-                conns, conns_rate, conn_fails, subs, sends, sends_rate, recvs, recvs_rate, closeds)
+        format!("* Connecteds:{} {:0.2?}/s, conn_fails:{}, subs:{}, sends:{} {:0.2?}/s, recvs:{} {:0.2?}/s, closeds:{}, last err: {:?}",
+                conns, conns_rate, conn_fails, subs, sends, sends_rate, recvs, recvs_rate, closeds, stats.last_err.write().take())
     }
 }
 
@@ -50,7 +56,7 @@ impl Counter {
     fn new() -> Self {
         Counter(
             AtomicIsize::new(0),
-            RwLock::new(DiscreteRateCounter::new(100)),
+            RwLock::new(DiscreteRateCounter::new(10)),
         )
     }
 

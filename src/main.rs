@@ -13,7 +13,7 @@ use rust_box::event::Event;
 use rust_box::std_ext::StdExt;
 use structopt::StructOpt;
 
-use options::Options;
+use options::{Command, Options, V3 as V3Options};
 use stats::Stats;
 use v3::Client;
 
@@ -30,35 +30,55 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let opts = Options::from_args();
-    log::info!("{:?}", opts);
+    println!("{:?}", opts);
 
-    v3_benchmarks(opts).await;
+    match opts.command {
+        Command::V3(v3) => {
+            v3_benchmarks(v3).await;
+        }
+        Command::V5(_v5) => {
+            println!("Unrealized.")
+        }
+    }
 
     Ok(())
 }
 
-async fn v3_benchmarks(opts: Options) {
+async fn v3_benchmarks(opts: V3Options) {
     let mgr = ControlManager::init(Arc::new(opts.clone()));
     for i in 0..opts.conns {
         let c = v3::Client::new(i, mgr.clone());
         mgr.add_client(c);
     }
 
-    let mut exit_futs = Vec::new();
-    for i in 0..mgr.clients_len() {
-        if let Some(c) = mgr.client(i) {
-            let exit_fut = c.start().await;
-            exit_futs.push(exit_fut.into_future());
-        }
-    }
-
-    std::thread::spawn(|| loop {
-        std::thread::sleep(Duration::from_secs(5));
-        log::info!("{}", Stats::instance().to_string());
+    let output_interval = Duration::from_secs(if opts.output_interval > 0 {
+        opts.output_interval
+    } else {
+        1
+    });
+    std::thread::spawn(move || loop {
+        std::thread::sleep(output_interval);
+        println!("{}", Stats::instance().to_string());
     });
 
-    futures::future::join_all(exit_futs).await;
-    log::info!("{}", Stats::instance().to_string());
+    spawn(async move {
+        let conn_interval = Duration::from_millis(opts.conn_interval);
+        let mut exit_futs = Vec::new();
+        for i in 0..mgr.clients_len() {
+            if let Some(c) = mgr.client(i) {
+                let exit_fut = c.start().await;
+                exit_futs.push(exit_fut.into_future());
+                if !conn_interval.is_zero() {
+                    sleep(conn_interval).await;
+                }
+            }
+        }
+        futures::future::join_all(exit_futs).await;
+    })
+        .await
+        .unwrap();
+
+    println!("{}", Stats::instance().to_string());
 }
 
 pub type TopicFilter = ByteString;
@@ -69,7 +89,7 @@ pub type PacketId = u16;
 
 #[derive(Clone)]
 pub struct ControlManager {
-    opts: Arc<Options>,
+    opts: Arc<V3Options>,
     clients: Arc<RwLock<Vec<Client>>>,
     connecteds: Arc<DashMap<String, Client>>,
     disconnecteds: Arc<DashMap<String, Client>>,
@@ -91,7 +111,7 @@ unsafe impl Sync for ControlManager {}
 static CONTROL_MANAGER: OnceCell<ControlManager> = OnceCell::new();
 
 impl ControlManager {
-    pub fn init(opts: Arc<Options>) -> &'static ControlManager {
+    pub fn init(opts: Arc<V3Options>) -> &'static ControlManager {
         CONTROL_MANAGER.set(Self::new(opts)).ok().unwrap();
         CONTROL_MANAGER.get().unwrap()
     }
@@ -100,7 +120,7 @@ impl ControlManager {
         CONTROL_MANAGER.get().unwrap()
     }
 
-    fn new(opts: Arc<Options>) -> Self {
+    fn new(opts: Arc<V3Options>) -> Self {
         Self {
             opts,
             clients: Arc::new(RwLock::new(Vec::new())),

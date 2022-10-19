@@ -19,8 +19,8 @@ use tokio::task::spawn_local;
 use uuid::Uuid;
 
 use super::{ControlManager, PacketId};
-use super::Options;
 use super::Stats;
+use super::V3Options;
 
 pub enum Message {
     Connect,
@@ -32,7 +32,6 @@ pub enum Message {
 pub struct Client {
     pub client_id: String,
     pub seq_no: String,
-    // pub opts: Arc<Options>,
     pub sink: Arc<RwLock<Option<v3::MqttSink>>>,
     pub mgr: ControlManager,
     subs: Arc<AtomicUsize>,
@@ -270,6 +269,7 @@ impl Client {
                         }
                         Err(e) => {
                             log::debug!("{:?} connect to {:?} fail, {:?}", client_id, addr, e);
+                            Stats::instance().set_last_err(format!("{:?}", e));
                             Stats::instance().conn_fails.inc();
                         }
                     }
@@ -300,6 +300,7 @@ impl Client {
                     for ret in rets {
                         if let SubscribeReturnCode::Failure = ret {
                             log::debug!("{:?} subscribe failure", client_id);
+                            Stats::instance().set_last_err("subscribe failure".into());
                             time::sleep(Duration::from_secs(5)).await;
                             continue 'subscribe;
                         } else {
@@ -317,13 +318,14 @@ impl Client {
                 }
                 Err(e) => {
                     log::debug!("{:?} subscribe error, {:?}", client_id, e);
+                    Stats::instance().set_last_err(format!("{:?}", e));
                     break;
                 }
             }
         }
     }
 
-    async fn publishs(c: Client, sink: v3::MqttSink, opts: Arc<Options>, client_id: String) {
+    async fn publishs(c: Client, sink: v3::MqttSink, opts: Arc<V3Options>, client_id: String) {
         let (no_start, no_end) = if let Some(range) = &opts.pub_topic_no_range {
             match range.len() {
                 0 => (0, opts.conns as u64),
@@ -349,7 +351,11 @@ impl Client {
                     .replace("{no}", &format!("{}", no)),
             );
 
-            let payload = ntex::util::Bytes::from("0".repeat(opts.pub_payload_len));
+            let payload = if let Some(payload) = &opts.pub_payload {
+                ntex::util::Bytes::from(payload.clone())
+            } else {
+                ntex::util::Bytes::from("0".repeat(opts.pub_payload_len))
+            };
 
             if sink.is_open() {
                 let packet_id = c.gen_packet_id();
@@ -379,11 +385,13 @@ impl Client {
                     if opts.qos == 0 {
                         if let Err(e) = pub_builder.send_at_most_once() {
                             log::debug!("{:?} publish error, {:?}", client_id, e);
+                            Stats::instance().set_last_err(format!("{:?}", e));
                         }
                     } else {
                         let pub_builder = pub_builder.packet_id(packet_id);
                         if let Err(e) = pub_builder.send_at_least_once().await {
                             log::debug!("{:?} publish error, {:?}", client_id, e);
+                            Stats::instance().set_last_err(format!("{:?}", e));
                         } else {
                             c.mgr.on_publish_ack.fire((c.clone(), packet_id));
                         }
@@ -416,14 +424,17 @@ impl Client {
                     }
                     v3::client::ControlMessage::Error(msg) => {
                         log::debug!("Codec error: {:?}", msg);
+                        Stats::instance().set_last_err(format!("{:?}", msg));
                         Ready::Ok(msg.ack())
                     }
                     v3::client::ControlMessage::ProtocolError(msg) => {
                         log::debug!("Protocol error: {:?}", msg);
+                        Stats::instance().set_last_err(format!("{:?}", msg));
                         Ready::Ok(msg.ack())
                     }
                     v3::client::ControlMessage::PeerGone(msg) => {
                         log::debug!("Peer closed connection: {:?}", msg.err());
+                        Stats::instance().set_last_err(format!("{:?}", msg));
                         Ready::Ok(msg.ack())
                     }
                     v3::client::ControlMessage::Closed(msg) => {

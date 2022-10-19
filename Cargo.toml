@@ -9,8 +9,8 @@ homepage = "https://github.com/rmqtt/rmqtt-bench"
 description = "rmqtt-bench - MQTT benchmark tool"
 
 [[bin]]
-name = "rmqtt-bench-v3"
-path = "src/main-v3.rs"
+name = "rmqtt-bench"
+path = "src/main.rs"
 
 [dependencies]
 rust-box = { version = "0.5", features = ["event", "std-ext"] }
