@@ -10,7 +10,7 @@ use ntex_mqtt::v3::QoS;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use rust_box::event::Event;
-use rust_box::std_ext::StdExt;
+use rust_box::std_ext::ArcExt;
 use structopt::StructOpt;
 
 use options::{Command, Options, V3 as V3Options};
