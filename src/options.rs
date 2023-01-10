@@ -22,7 +22,7 @@ pub enum Command {
 #[derive(StructOpt, Debug, Clone)]
 pub struct V3 {
     ///MQTT broker endpoint list, "host1:port host2:port host3:port"
-    #[structopt(long, default_value = "localhost:1883")]
+    #[structopt(long, default_value = "127.0.0.1:1883")]
     pub addrs: Vec<String>,
 
     ///Bind local IP address, "127.0.0.1 127.0.0.2 127.0.0.3"
