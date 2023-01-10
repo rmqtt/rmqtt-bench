@@ -1,27 +1,27 @@
-use std::convert::TryFrom;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::time::Duration;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
 use ntex::time;
-use ntex::time::{Seconds, sleep};
-use ntex::util::Bytes;
+use ntex::time::{sleep, Seconds};
 use ntex::util::ByteString;
+use ntex::util::Bytes;
 use ntex::util::Ready;
-use ntex_mqtt::{self, v3};
 use ntex_mqtt::error::SendPacketError;
 use ntex_mqtt::v3::codec::SubscribeReturnCode;
+use ntex_mqtt::{self, v3};
 use parking_lot::{Mutex, RwLock};
+use std::convert::TryFrom;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::spawn_local;
 use uuid::Uuid;
 
-use super::{ControlManager, PacketId};
+use super::connector::ConnectorFactory;
 use super::Stats;
 use super::V3Options;
-use super::connector::ConnectorFactory;
+use super::{ControlManager, PacketId};
 
 pub enum Message {
     Connect,
@@ -177,7 +177,7 @@ impl Client {
         if !opts.ifaddrs.is_empty() {
             let idx = rand::prelude::random::<usize>() % opts.ifaddrs.len();
             client.ifaddr.write().replace(opts.ifaddrs[idx].clone());
-            baddr  = Some(format!("{}:0", opts.ifaddrs[idx]).parse().unwrap());
+            baddr = Some(format!("{}:0", opts.ifaddrs[idx]).parse().unwrap());
         }
 
         let mut builder = v3::client::MqttConnector::new(addr.clone())
@@ -433,11 +433,11 @@ impl Client {
                             .fire((client.clone(), publish.packet().clone()));
                         Ready::Ok(publish.ack())
                     }
-//                    #[allow(deprecated)]
-//                    v3::client::ControlMessage::Disconnect(msg) => {
-//                        log::debug!("Server disconnecting: {:?}", msg);
-//                        Ready::Ok(msg.ack())
-//                    }
+                    //                    #[allow(deprecated)]
+                    //                    v3::client::ControlMessage::Disconnect(msg) => {
+                    //                        log::debug!("Server disconnecting: {:?}", msg);
+                    //                        Ready::Ok(msg.ack())
+                    //                    }
                     v3::client::ControlMessage::Error(msg) => {
                         log::debug!("Codec error: {:?}", msg);
                         Stats::instance().set_last_err(format!("{:?}", msg));

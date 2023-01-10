@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicIsize, Ordering};
 
+use dashmap::DashMap;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use update_rate::{DiscreteRateCounter, RateCounter};
-use dashmap::DashMap;
 
 pub struct Stats {
     pub conns: Counter,
@@ -37,7 +37,11 @@ impl Stats {
 
     pub fn ifaddrs_inc(&self, ifaddr: Option<String>) {
         if let Some(ifaddr) = ifaddr {
-            self.ifaddrs.entry(ifaddr).or_insert_with(|| Counter::new()).value().inc();
+            self.ifaddrs
+                .entry(ifaddr)
+                .or_insert_with(|| Counter::new())
+                .value()
+                .inc();
         }
     }
 
@@ -60,9 +64,11 @@ impl Stats {
         let sends = stats.sends.value();
         let sends_rate = stats.sends.rate();
         let closeds = stats.closeds.value();
-        let ifaddrs = &stats.ifaddrs.iter().map(|entry|{
-            (entry.key().clone(), entry.value().value())
-        }).collect::<Vec<(String, isize)>>();
+        let ifaddrs = &stats
+            .ifaddrs
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().value()))
+            .collect::<Vec<(String, isize)>>();
         format!("* Connecteds:{} {:0.2?}/s, conn_fails:{}, subs:{}, sends:{} {:0.2?}/s, recvs:{} {:0.2?}/s, closeds:{}, ifaddrs: {:?}, last err: {:?}",
                 conns, conns_rate, conn_fails, subs, sends, sends_rate, recvs, recvs_rate, closeds, ifaddrs, stats.last_err.write().take())
     }

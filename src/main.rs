@@ -19,10 +19,10 @@ use v3::Client;
 
 type DashMap<K, V> = dashmap::DashMap<K, V, ahash::RandomState>;
 
+mod connector;
 mod options;
 mod script;
 mod stats;
-mod connector;
 mod v3;
 
 #[ntex::main]
@@ -76,8 +76,8 @@ async fn v3_benchmarks(opts: V3Options) {
         }
         futures::future::join_all(exit_futs).await;
     })
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     println!("{}", Stats::instance().to_string());
 }
@@ -134,22 +134,22 @@ impl ControlManager {
                 ControlManager::instance().add_connected(c);
                 ()
             })
-                .finish()
-                .arc(),
+            .finish()
+            .arc(),
             on_disconnected: Event::listen(|c: Client, _next| {
                 Stats::instance().ifaddrs_dec(c.ifaddr().as_ref());
                 ControlManager::instance().add_disconnected(c);
                 ()
             })
-                .finish()
-                .arc(),
+            .finish()
+            .arc(),
             on_subscribe: Event::listen(|_args, _next| true).finish().arc(),
             on_subscribed: Event::listen(|_args, _next| ()).finish().arc(),
             on_publish: Event::listen(|_args, _next| true).finish().arc(),
             on_publish_ack: Event::listen(|_args, _next| ()).finish().arc(),
             on_message: Event::listen(|_args, _next| ()).finish().arc(),
         }
-            .control()
+        .control()
     }
 
     fn add_client(&self, c: Client) {

@@ -1,13 +1,13 @@
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::rc::Rc;
 use std::task::{Context, Poll};
 use std::{any, collections::VecDeque, future::Future, io, net::SocketAddr, pin::Pin};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::{mem, rc::Weak};
-use std::fmt::Debug;
 
 use ntex::connect::{Address, Connect, ConnectError, Resolver};
+use ntex::io::{types, Handle, Io, IoStream, ReadContext, ReadStatus, WriteContext, WriteStatus};
 use ntex::util::{ready, Either, PoolId, PoolRef};
-use ntex::io::{types, Io, IoStream, ReadContext, WriteContext, Handle, ReadStatus, WriteStatus};
 
 use ntex::service::Service;
 use ntex::time::{sleep, Sleep};
@@ -15,15 +15,13 @@ use ntex_bytes::{Buf, BufMut, BytesVec};
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-use log::{trace, error};
-
+use log::{error, trace};
 
 pub struct Connector<T> {
     resolver: Resolver<T>,
     pool: PoolRef,
     bind_addr: Option<SocketAddr>,
 }
-
 
 impl<T> Connector<T> {
     /// Construct new connect service with custom dns resolver
@@ -35,14 +33,14 @@ impl<T> Connector<T> {
         }
     }
 
-//    /// Set memory pool.
-//    ///
-//    /// Use specified memory pool for memory allocations. By default P0
-//    /// memory pool is used.
-//    pub fn memory_pool(mut self, id: PoolId) -> Self {
-//        self.pool = id.pool_ref();
-//        self
-//    }
+    //    /// Set memory pool.
+    //    ///
+    //    /// Use specified memory pool for memory allocations. By default P0
+    //    /// memory pool is used.
+    //    pub fn memory_pool(mut self, id: PoolId) -> Self {
+    //        self.pool = id.pool_ref();
+    //        self
+    //    }
 }
 
 //impl<T: Address> Connector<T> {
@@ -122,7 +120,6 @@ enum ConnectState<T: Address> {
     Connect(TcpConnectorResponse),
 }
 
-
 #[doc(hidden)]
 pub struct ConnectServiceResponse<T: Address> {
     state: ConnectState<T>,
@@ -131,7 +128,10 @@ pub struct ConnectServiceResponse<T: Address> {
 }
 
 impl<T: Address> ConnectServiceResponse<T> {
-    pub(super) fn new(fut: <Resolver<T> as Service<Connect<T>>>::Future, bind_addr: Option<SocketAddr>) -> Self {
+    pub(super) fn new(
+        fut: <Resolver<T> as Service<Connect<T>>>::Future,
+        bind_addr: Option<SocketAddr>,
+    ) -> Self {
         Self {
             state: ConnectState::Resolve(fut),
             bind_addr,
@@ -155,7 +155,11 @@ impl<T: Address> Future for ConnectServiceResponse<T> {
 
                     if let Some(addr) = addrs.pop() {
                         self.state = ConnectState::Connect(TcpConnectorResponse::new(
-                            req, port, Either::Left(addr), self.bind_addr, self.pool,
+                            req,
+                            port,
+                            Either::Left(addr),
+                            self.bind_addr,
+                            self.pool,
                         ));
                         self.poll(cx)
                     } else if let Some(addr) = req.addr() {
@@ -177,8 +181,6 @@ impl<T: Address> Future for ConnectServiceResponse<T> {
         }
     }
 }
-
-
 
 /// Tcp stream connector response future
 struct TcpConnectorResponse {
@@ -265,7 +267,11 @@ impl Future for TcpConnectorResponse {
 
             // try to connect
             let addr = this.addrs.as_mut().unwrap().pop_front().unwrap();
-            this.stream = Some(Box::pin(tcp_bind_connect_in(addr, this.bind_addr, this.pool)));
+            this.stream = Some(Box::pin(tcp_bind_connect_in(
+                addr,
+                this.bind_addr,
+                this.pool,
+            )));
         }
     }
 }
@@ -399,8 +405,7 @@ pub fn poll_read_buf<T: AsyncRead>(
     }
 
     let n = {
-        let dst =
-            unsafe { &mut *(buf.chunk_mut() as *mut _ as *mut [mem::MaybeUninit<u8>]) };
+        let dst = unsafe { &mut *(buf.chunk_mut() as *mut _ as *mut [mem::MaybeUninit<u8>]) };
         let mut buf = ReadBuf::uninit(dst);
         let ptr = buf.filled().as_ptr();
         if io.poll_read(cx, &mut buf)?.is_pending() {
@@ -528,9 +533,7 @@ impl Future for WriteTask {
                                     continue;
                                 }
                                 Poll::Ready(false) => {
-                                    log::trace!(
-                                        "write task is closed with err during flush"
-                                    );
+                                    log::trace!("write task is closed with err during flush");
                                     this.state.close(None);
                                     return Poll::Ready(());
                                 }
@@ -545,9 +548,7 @@ impl Future for WriteTask {
                                     continue;
                                 }
                                 Poll::Ready(Err(e)) => {
-                                    log::trace!(
-                                        "write task is closed with err during shutdown"
-                                    );
+                                    log::trace!("write task is closed with err during shutdown");
                                     this.state.close(Some(e));
                                     return Poll::Ready(());
                                 }
@@ -563,18 +564,16 @@ impl Future for WriteTask {
                                     .poll_read(cx, &mut read_buf)
                                 {
                                     Poll::Ready(Err(_)) | Poll::Ready(Ok(_))
-                                    if read_buf.filled().is_empty() =>
-                                        {
-                                            this.state.close(None);
-                                            log::trace!("write task is stopped");
-                                            return Poll::Ready(());
-                                        }
+                                        if read_buf.filled().is_empty() =>
+                                    {
+                                        this.state.close(None);
+                                        log::trace!("write task is stopped");
+                                        return Poll::Ready(());
+                                    }
                                     Poll::Pending => {
                                         *count += read_buf.filled().len() as u16;
                                         if *count > 4096 {
-                                            log::trace!(
-                                                "write task is stopped, too much input"
-                                            );
+                                            log::trace!("write task is stopped, too much input");
                                             this.state.close(None);
                                             return Poll::Ready(());
                                         }

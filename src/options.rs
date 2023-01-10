@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
-use ntex::util::Bytes;
 use ntex::util::ByteString;
+use ntex::util::Bytes;
 use ntex_mqtt::v3::codec;
 use structopt::StructOpt;
 
