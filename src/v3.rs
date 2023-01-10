@@ -1,8 +1,8 @@
 use std::convert::TryFrom;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
-
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -21,6 +21,7 @@ use uuid::Uuid;
 use super::{ControlManager, PacketId};
 use super::Stats;
 use super::V3Options;
+use super::connector::ConnectorFactory;
 
 pub enum Message {
     Connect,
@@ -34,6 +35,7 @@ pub struct Client {
     pub seq_no: String,
     pub sink: Arc<RwLock<Option<v3::MqttSink>>>,
     pub mgr: ControlManager,
+    ifaddr: Arc<RwLock<Option<String>>>,
     subs: Arc<AtomicUsize>,
     msg_tx: Arc<RwLock<Option<mpsc::Sender<Message>>>>,
     disconnected: Arc<AtomicBool>,
@@ -58,6 +60,7 @@ impl Client {
             seq_no,
             sink: Arc::new(RwLock::new(None)),
             mgr,
+            ifaddr: Arc::new(RwLock::new(None)),
             subs: Arc::new(AtomicUsize::new(0)),
             msg_tx: Arc::new(RwLock::new(None)),
             disconnected: Arc::new(AtomicBool::new(false)),
@@ -150,6 +153,10 @@ impl Client {
         self.subs.load(Ordering::SeqCst)
     }
 
+    pub fn ifaddr(&self) -> Option<String> {
+        self.ifaddr.read().as_ref().cloned()
+    }
+
     pub async fn start(&self) -> mpsc::Receiver<()> {
         let client = self.clone();
 
@@ -165,7 +172,16 @@ impl Client {
         let _ = msg_tx.send(Message::Connect).await;
 
         let addr = opts.addr();
+
+        let mut baddr: Option<SocketAddr> = None;
+        if !opts.ifaddrs.is_empty() {
+            let idx = rand::prelude::random::<usize>() % opts.ifaddrs.len();
+            client.ifaddr.write().replace(opts.ifaddrs[idx].clone());
+            baddr  = Some(format!("{}:0", opts.ifaddrs[idx]).parse().unwrap());
+        }
+
         let mut builder = v3::client::MqttConnector::new(addr.clone())
+            .connector(ConnectorFactory::new(baddr))
             .client_id(client_id.clone())
             .keep_alive(Seconds(opts.keepalive))
             .handshake_timeout(Seconds(opts.handshake_timeout));
@@ -417,11 +433,11 @@ impl Client {
                             .fire((client.clone(), publish.packet().clone()));
                         Ready::Ok(publish.ack())
                     }
-                    #[allow(deprecated)]
-                    v3::client::ControlMessage::Disconnect(msg) => {
-                        log::debug!("Server disconnecting: {:?}", msg);
-                        Ready::Ok(msg.ack())
-                    }
+//                    #[allow(deprecated)]
+//                    v3::client::ControlMessage::Disconnect(msg) => {
+//                        log::debug!("Server disconnecting: {:?}", msg);
+//                        Ready::Ok(msg.ack())
+//                    }
                     v3::client::ControlMessage::Error(msg) => {
                         log::debug!("Codec error: {:?}", msg);
                         Stats::instance().set_last_err(format!("{:?}", msg));

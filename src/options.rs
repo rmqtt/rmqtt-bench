@@ -25,6 +25,10 @@ pub struct V3 {
     #[structopt(long, default_value = "localhost:1883")]
     pub addrs: Vec<String>,
 
+    ///Bind local IP address, "127.0.0.1 127.0.0.2 127.0.0.3"
+    #[structopt(long)]
+    pub ifaddrs: Vec<String>,
+
     /// The number of connections
     #[structopt(short, long, default_value = "1000")]
     pub conns: usize,

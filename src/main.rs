@@ -22,6 +22,7 @@ type DashMap<K, V> = dashmap::DashMap<K, V, ahash::RandomState>;
 mod options;
 mod script;
 mod stats;
+mod connector;
 mod v3;
 
 #[ntex::main]
@@ -129,12 +130,14 @@ impl ControlManager {
 
             on_connect: Event::listen(|_args, _next| true).finish().arc(),
             on_connected: Event::listen(|c: Client, _next| {
+                Stats::instance().ifaddrs_inc(c.ifaddr());
                 ControlManager::instance().add_connected(c);
                 ()
             })
                 .finish()
                 .arc(),
             on_disconnected: Event::listen(|c: Client, _next| {
+                Stats::instance().ifaddrs_dec(c.ifaddr().as_ref());
                 ControlManager::instance().add_disconnected(c);
                 ()
             })

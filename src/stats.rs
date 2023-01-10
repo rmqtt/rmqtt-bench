@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicIsize, Ordering};
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use update_rate::{DiscreteRateCounter, RateCounter};
+use dashmap::DashMap;
 
 pub struct Stats {
     pub conns: Counter,
@@ -11,6 +12,7 @@ pub struct Stats {
     pub recvs: Counter,
     pub sends: Counter,
     pub closeds: Counter,
+    pub ifaddrs: DashMap<String, Counter>,
     pub last_err: RwLock<Option<String>>,
 }
 
@@ -24,12 +26,27 @@ impl Stats {
             recvs: Counter::new(),
             sends: Counter::new(),
             closeds: Counter::new(),
+            ifaddrs: DashMap::new(),
             last_err: RwLock::new(None),
         })
     }
 
     pub fn set_last_err(&self, err: String) {
         self.last_err.write().replace(err);
+    }
+
+    pub fn ifaddrs_inc(&self, ifaddr: Option<String>) {
+        if let Some(ifaddr) = ifaddr {
+            self.ifaddrs.entry(ifaddr).or_insert_with(|| Counter::new()).value().inc();
+        }
+    }
+
+    pub fn ifaddrs_dec(&self, ifaddr: Option<&String>) {
+        if let Some(ifaddr) = ifaddr {
+            if let Some(entry) = self.ifaddrs.get_mut(ifaddr) {
+                entry.value().dec()
+            }
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -43,8 +60,11 @@ impl Stats {
         let sends = stats.sends.value();
         let sends_rate = stats.sends.rate();
         let closeds = stats.closeds.value();
-        format!("* Connecteds:{} {:0.2?}/s, conn_fails:{}, subs:{}, sends:{} {:0.2?}/s, recvs:{} {:0.2?}/s, closeds:{}, last err: {:?}",
-                conns, conns_rate, conn_fails, subs, sends, sends_rate, recvs, recvs_rate, closeds, stats.last_err.write().take())
+        let ifaddrs = &stats.ifaddrs.iter().map(|entry|{
+            (entry.key().clone(), entry.value().value())
+        }).collect::<Vec<(String, isize)>>();
+        format!("* Connecteds:{} {:0.2?}/s, conn_fails:{}, subs:{}, sends:{} {:0.2?}/s, recvs:{} {:0.2?}/s, closeds:{}, ifaddrs: {:?}, last err: {:?}",
+                conns, conns_rate, conn_fails, subs, sends, sends_rate, recvs, recvs_rate, closeds, ifaddrs, stats.last_err.write().take())
     }
 }
 
