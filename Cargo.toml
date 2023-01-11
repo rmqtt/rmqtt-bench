@@ -13,10 +13,11 @@ name = "rmqtt-bench"
 path = "src/main.rs"
 
 [dependencies]
+ntex-mqtt = "0.9"
+ntex = { version = "0.5.16", features = ["tokio", "rustls"] }
+ntex-bytes = "0.1"
 rust-box = { version = "0.5", features = ["event", "std-ext"] }
 futures = "0.3"
-ntex-mqtt = "0.8"
-ntex = { version = "0.5", features = ["tokio", "rustls"] }
 structopt = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"], default-features = false }
 log = "0.4"
