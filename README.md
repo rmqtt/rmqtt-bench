@@ -56,6 +56,7 @@ OPTIONS:
     -D, --ctrl-disconn-ratio <ctrl-disconn-ratio>    Disconnected and Reconnection ratio [default: 0.4]
     -L, --ctrl-interval <ctrl-interval>              Control interval, millisecond [default: 1000]
 
+        --ifaddrs <ifaddrs>...                       Local ipaddress, "127.0.0.1 127.0.0.2 127.0.0.3"
 ```
 
 ### Connect Benchmark
