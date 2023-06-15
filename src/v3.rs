@@ -357,7 +357,9 @@ impl Client {
         let qos = v3::codec::QoS::try_from(opts.qos).unwrap();
 
         loop {
-            sleep(Duration::from_millis(opts.pub_interval)).await;
+            if opts.pub_interval > 0 {
+                sleep(Duration::from_millis(opts.pub_interval)).await;
+            }
 
             let no = (rand::prelude::random::<u64>() % pub_topic_len) + no_start;
             let pub_topic = ByteString::from(
