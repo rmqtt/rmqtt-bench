@@ -25,6 +25,10 @@ mod script;
 mod stats;
 mod v3;
 
+#[cfg(target_os = "linux")]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 #[ntex::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_LOG", "rmqtt_bench=info");

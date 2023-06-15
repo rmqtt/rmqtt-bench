@@ -1,6 +1,6 @@
 [package]
 name = "rmqtt-bench"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["rmqtt <rmqttd@126.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -11,6 +11,9 @@ description = "rmqtt-bench - MQTT benchmark tool"
 [[bin]]
 name = "rmqtt-bench"
 path = "src/main.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = "0.5"
 
 [dependencies]
 ntex-mqtt = "0.9"
