@@ -11,7 +11,7 @@ use ntex_mqtt::v3::codec::SubscribeReturnCode;
 use ntex_mqtt::{self, v3};
 use parking_lot::{Mutex, RwLock};
 use std::convert::TryFrom;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -171,13 +171,13 @@ impl Client {
         self.msg_tx.write().replace(msg_tx.clone());
         let _ = msg_tx.send(Message::Connect).await;
 
-        let addr = opts.addr();
+        let addr = parse_addr(&opts.addr()).unwrap().to_string();
 
         let mut baddr: Option<SocketAddr> = None;
         if !opts.ifaddrs.is_empty() {
             let idx = rand::prelude::random::<usize>() % opts.ifaddrs.len();
             client.ifaddr.write().replace(opts.ifaddrs[idx].clone());
-            baddr = Some(format!("{}:0", opts.ifaddrs[idx]).parse().unwrap());
+            baddr = Some(parse_addr(&format!("{}:0", opts.ifaddrs[idx])).unwrap());
         }
 
         let mut builder = v3::client::MqttConnector::new(addr.clone())
@@ -469,4 +469,8 @@ impl Client {
             log::error!("start ev_loop error! {:?}", e);
         }
     }
+}
+
+fn parse_addr(addr: &str) -> anyhow::Result<SocketAddr> {
+    addr.to_socket_addrs()?.next().ok_or_else(|| anyhow::Error::msg("None"))
 }
