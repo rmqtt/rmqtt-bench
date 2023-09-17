@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::spawn_local;
 use uuid::Uuid;
+use crate::stats::{EndMillis, StartMillis};
 
 use super::connector::ConnectorFactory;
 use super::Stats;
@@ -139,8 +141,8 @@ impl Client {
         self.msg_tx.read().as_ref().cloned()
     }
 
-    fn subs_inc(&self) {
-        Stats::instance().subs.inc();
+    fn subs_inc(&self, start: StartMillis, end: EndMillis) {
+        Stats::instance().subs.inc2(start, end);
         self.subs.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -233,6 +235,7 @@ impl Client {
                 let connect_enable = mgr.on_connect.fire(client.clone());
 
                 if connect_enable {
+                    let start = chrono::Local::now().timestamp_millis();
                     match builder.connect().await {
                         Ok(c) => {
                             mgr.on_connected.fire(client.clone());
@@ -240,8 +243,8 @@ impl Client {
                             let sink = c.sink();
 
                             client.set_sink(sink.clone());
-
-                            Stats::instance().conns.inc();
+                            let end = chrono::Local::now().timestamp_millis();
+                            Stats::instance().conns.inc2(start, end);
 
                             //subscribe
                             if opts.sub_switch {
@@ -306,6 +309,7 @@ impl Client {
         client_id: String,
     ) {
         'subscribe: loop {
+            let start = chrono::Local::now().timestamp_millis();
             match sink
                 .subscribe()
                 .topic_filter(sub_topic.clone(), qos)
@@ -313,6 +317,7 @@ impl Client {
                 .await
             {
                 Ok(rets) => {
+                    let end = chrono::Local::now().timestamp_millis();
                     for ret in rets {
                         if let SubscribeReturnCode::Failure = ret {
                             log::debug!("{:?} subscribe failure", client_id);
@@ -320,7 +325,7 @@ impl Client {
                             time::sleep(Duration::from_secs(5)).await;
                             continue 'subscribe;
                         } else {
-                            c.subs_inc();
+                            c.subs_inc(start, end);
                         }
                     }
                     c.mgr
@@ -370,11 +375,13 @@ impl Client {
             );
 
             let payload = if let Some(payload) = &opts.pub_payload {
-                ntex::util::Bytes::from(payload.clone())
+                Cow::Borrowed(payload)
             } else {
-                ntex::util::Bytes::from("0".repeat(opts.pub_payload_len))
+                Cow::Owned("0".repeat(opts.pub_payload_len))
             };
 
+            let payload = format!("{{ \"data\": \"{}\", \"create_time\": {} }}", payload.as_str(), chrono::Local::now().timestamp_millis());
+            let payload = ntex::util::Bytes::from(payload);
             if sink.is_open() {
                 let packet_id = c.gen_packet_id();
 
@@ -428,7 +435,12 @@ impl Client {
             .start(
                 move |control: v3::client::ControlMessage<()>| match control {
                     v3::client::ControlMessage::Publish(publish) => {
-                        Stats::instance().recvs.inc();
+                        let now = chrono::Local::now().timestamp_millis();
+                        let payload = serde_json::from_slice::<serde_json::Value>(publish.packet().payload.as_ref()).unwrap();
+                        let create_time = payload.as_object().and_then(|obj|{
+                            obj.get("create_time").map(|v|v.as_i64())
+                        }).unwrap().unwrap();
+                        Stats::instance().recvs.inc_limit_cost_times((Stats::instance().conns.value() * 2) as usize, create_time, now);
                         client
                             .mgr
                             .on_message
