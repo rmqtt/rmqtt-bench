@@ -32,36 +32,7 @@ impl<T> Connector<T> {
             bind_addr,
         }
     }
-
-    //    /// Set memory pool.
-    //    ///
-    //    /// Use specified memory pool for memory allocations. By default P0
-    //    /// memory pool is used.
-    //    pub fn memory_pool(mut self, id: PoolId) -> Self {
-    //        self.pool = id.pool_ref();
-    //        self
-    //    }
 }
-
-//impl<T: Address> Connector<T> {
-//    /// Resolve and connect to remote host
-//    pub fn connect<U>(&self, message: U) -> impl Future<Output = Result<Io, ConnectError>>
-//        where
-//            Connect<T>: From<U>,
-//    {
-//        ConnectServiceResponse {
-//            state: ConnectState::Resolve(self.resolver.call(message.into())),
-//            bind_addr: self.bind_addr,
-//            pool: self.pool,
-//        }
-//    }
-//}
-
-//impl<T> Default for Connector<T> {
-//    fn default() -> Self {
-//        Connector::new(None)
-//    }
-//}
 
 impl<T> Clone for Connector<T> {
     fn clone(&self) -> Self {
@@ -73,31 +44,6 @@ impl<T> Clone for Connector<T> {
     }
 }
 
-//impl<T: Address> From<Connector<T>> for IoBoxed {
-//    fn from(value: Connector<T>) -> Self {
-//        IoBoxed::from(Io::new(value))
-//    }
-//}
-//
-//impl<T: Address> IoStream for Connector<T> {
-//    fn start(self, _read: ReadContext, _write: WriteContext) -> Option<Box<dyn Handle>> {
-//        let io = Rc::new(RefCell::new(self));
-//        Some(Box::new(IoBoxedHandleWrapper(io)))
-//    }
-//}
-
-//impl<T: Address + Debug, C> ServiceFactory<Connect<T>, C> for Connector<T> {
-//    type Response = Io;
-//    type Error = ConnectError;
-//    type Service = Connector<T>;
-//    type InitError = ();
-//    type Future = Ready<Self::Service, Self::InitError>;
-//
-//    #[inline]
-//    fn new_service(&self, _: C) -> Self::Future {
-//        Ready::Ok(self.clone())
-//    }
-//}
 
 impl<T: Address> Service<Connect<T>> for Connector<T> {
     type Response = Io;
@@ -461,7 +407,7 @@ impl Future for WriteTask {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.as_mut().get_mut();
+        let this = self.as_mut().get_mut();
 
         match this.st {
             IoWriteState::Processing(ref mut delay) => {
@@ -724,13 +670,5 @@ where
         self.srv
     }
 }
-
-//struct IoBoxedHandleWrapper<T>(Rc<RefCell<Connector<T>>>);
-//
-//impl<T> Handle for IoBoxedHandleWrapper<T> {
-//    fn query(&self, _id: any::TypeId) -> Option<Box<dyn any::Any>> {
-//        None
-//    }
-//}
 
 pub type ReqAddress = String;
