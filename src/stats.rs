@@ -40,7 +40,7 @@ impl Stats {
         if let Some(ifaddr) = ifaddr {
             self.ifaddrs
                 .entry(ifaddr)
-                .or_insert_with(|| Counter::new())
+                .or_insert_with(Counter::new)
                 .value()
                 .inc();
         }
@@ -54,23 +54,23 @@ impl Stats {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> String {
         let stats = Stats::instance();
 
         let conns = stats.conns.value();
         let conns_rate = stats.conns.rate();
-        let conns_avg_rate  = stats.conns.avg_rate();
+        let conns_avg_rate = stats.conns.avg_rate();
         let conns_medi_rate = stats.conns.medi_rate();
 
         let subs = stats.subs.value();
         let subs_rate = stats.subs.rate();
-        let subs_avg_rate  = stats.subs.avg_rate();
+        let subs_avg_rate = stats.subs.avg_rate();
         let subs_medi_rate = stats.subs.medi_rate();
 
         let conn_fails = stats.conn_fails.value();
         let recvs = stats.recvs.value();
         let recvs_rate = stats.recvs.rate();
-        let recvs_avg_rate  = stats.recvs.avg_rate();
+        let recvs_avg_rate = stats.recvs.avg_rate();
         let recvs_medi_rate = stats.recvs.medi_rate();
 
         let sends = stats.sends.value();
@@ -89,11 +89,11 @@ impl Stats {
 pub type StartMillis = i64;
 pub type EndMillis = i64;
 
-pub struct Counter{
-    inner: RwLock<CounterInner>
+pub struct Counter {
+    inner: RwLock<CounterInner>,
 }
 
-pub struct CounterInner{
+pub struct CounterInner {
     nums: isize,
     rate: DiscreteRateCounter,
     cost_times: Vec<(StartMillis, EndMillis)>,
@@ -102,7 +102,13 @@ pub struct CounterInner{
 impl Debug for Counter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let inner = self.inner.read();
-        write!(f, "(nums: {}, rate: {:?}, cost_times_len: {})", inner.nums, inner.rate.rate(), inner.cost_times.len())
+        write!(
+            f,
+            "(nums: {}, rate: {:?}, cost_times_len: {})",
+            inner.nums,
+            inner.rate.rate(),
+            inner.cost_times.len()
+        )
     }
 }
 
@@ -110,12 +116,11 @@ impl Counter {
     #[inline]
     fn new() -> Self {
         Counter {
-            inner: RwLock::new(
-                CounterInner {
-                    nums: 0,
-                    rate: DiscreteRateCounter::new(100),
-                    cost_times: Vec::new()
-                })
+            inner: RwLock::new(CounterInner {
+                nums: 0,
+                rate: DiscreteRateCounter::new(100),
+                cost_times: Vec::new(),
+            }),
         }
     }
 
@@ -140,19 +145,23 @@ impl Counter {
             inner.nums += 1;
             inner.rate.update();
             true
-        }else{
+        } else {
             false
         }
     }
 
     #[inline]
-    pub fn inc_limit_cost_times(&self, limit_cost_times: usize, start: StartMillis, end: EndMillis) {
+    pub fn inc_limit_cost_times(
+        &self,
+        limit_cost_times: usize,
+        start: StartMillis,
+        end: EndMillis,
+    ) {
         let mut inner = self.inner.write();
         inner.nums += 1;
         inner.rate.update();
         if inner.cost_times.len() > limit_cost_times {
             inner.cost_times.remove(0);
-
         }
         inner.cost_times.push((start, end));
     }
@@ -186,10 +195,9 @@ impl Counter {
             let (_, last) = inner.cost_times.last().unwrap();
             //println!("avg_rate inner.cost_times.len(): {}, {:?}, first: {}, last: {}", inner.cost_times.len(), ((last - first) as f64 / 1000.0), first, last);
             inner.cost_times.len() as f64 / ((last - first) as f64 / 1000.0)
-        }else{
+        } else {
             1.0
         }
-
     }
 
     #[inline]
@@ -204,9 +212,8 @@ impl Counter {
             let (_, last) = inner.cost_times[end_idx];
             //println!("medi_rate inner.cost_times.len(): {}, {:?}", end_idx - start_idx, ((last - first) as f64 / 1000.0));
             (end_idx - start_idx) as f64 / ((last - first) as f64 / 1000.0)
-        }else{
+        } else {
             1.0
         }
-
     }
 }

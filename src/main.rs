@@ -39,7 +39,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     match opts.command {
         Command::V3(v3) => {
-            v3_benchmarks(v3).await;
+            v3_benchmarks(*v3).await;
         }
         Command::V5(_v5) => {
             println!("Unrealized.")
@@ -63,7 +63,7 @@ async fn v3_benchmarks(opts: V3Options) {
     });
     std::thread::spawn(move || loop {
         std::thread::sleep(output_interval);
-        println!("{}", Stats::instance().to_string());
+        println!("{}", Stats::instance().to_str());
     });
 
     spawn(async move {
@@ -83,7 +83,7 @@ async fn v3_benchmarks(opts: V3Options) {
     .await
     .unwrap();
 
-    println!("{}", Stats::instance().to_string());
+    println!("{}", Stats::instance().to_str());
 }
 
 pub type TopicFilter = ByteString;
@@ -104,6 +104,7 @@ pub struct ControlManager {
     on_disconnected: Arc<Event<Client, ()>>,
     on_subscribe: Arc<Event<(Client, TopicFilter, QoS), bool>>,
     on_subscribed: Arc<Event<(Client, TopicFilter, QoS), ()>>,
+    #[allow(clippy::type_complexity)]
     on_publish: Arc<Event<(Client, PacketId, Topic, QoS, Retain, Payload), bool>>,
     on_publish_ack: Arc<Event<(Client, PacketId), ()>>,
     on_message: Arc<Event<(Client, Publish), ()>>,
@@ -125,6 +126,7 @@ impl ControlManager {
         CONTROL_MANAGER.get().unwrap()
     }
 
+    #[allow(clippy::arc_with_non_send_sync)]
     fn new(opts: Arc<V3Options>) -> Self {
         Self {
             opts,
@@ -136,14 +138,12 @@ impl ControlManager {
             on_connected: Event::listen(|c: Client, _next| {
                 Stats::instance().ifaddrs_inc(c.ifaddr());
                 ControlManager::instance().add_connected(c);
-                ()
             })
             .finish()
             .arc(),
             on_disconnected: Event::listen(|c: Client, _next| {
                 Stats::instance().ifaddrs_dec(c.ifaddr().as_ref());
                 ControlManager::instance().add_disconnected(c);
-                ()
             })
             .finish()
             .arc(),
@@ -241,4 +241,13 @@ impl ControlManager {
         }
         self
     }
+}
+
+#[inline]
+pub fn timestamp_millis() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|t| t.as_millis() as i64)
+        .unwrap_or_else(|_| chrono::Local::now().timestamp_millis())
 }

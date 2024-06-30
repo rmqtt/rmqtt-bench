@@ -44,7 +44,6 @@ impl<T> Clone for Connector<T> {
     }
 }
 
-
 impl<T: Address> Service<Connect<T>> for Connector<T> {
     type Response = Io;
     type Error = ConnectError;
@@ -134,6 +133,7 @@ struct TcpConnectorResponse {
     port: u16,
     addrs: Option<VecDeque<SocketAddr>>,
     bind_addr: Option<SocketAddr>,
+    #[allow(clippy::type_complexity)]
     stream: Option<Pin<Box<dyn Future<Output = Result<Io, io::Error>>>>>,
     pool: PoolRef,
 }
@@ -250,6 +250,7 @@ impl Handle for HandleWrapper {
 }
 
 /// Query TCP Io connections for a handle to set socket options
+#[allow(dead_code)]
 pub struct SocketOptions(Weak<RefCell<tokio::net::TcpStream>>);
 
 /// Read io task

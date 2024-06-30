@@ -14,7 +14,7 @@ pub struct Options {
 #[derive(Debug, StructOpt, Clone)]
 pub enum Command {
     #[structopt(name = "v3")]
-    V3(V3),
+    V3(Box<V3>),
     #[structopt(name = "v5")]
     V5(V5),
 }
@@ -150,11 +150,7 @@ impl LastWill {
                 topic: ByteString::from(topic.clone()),
                 message: Bytes::from(message.clone()),
                 qos: codec::QoS::try_from(qos).unwrap(),
-                retain: if let Some(retain) = retain {
-                    retain
-                } else {
-                    false
-                },
+                retain: retain.unwrap_or_default(),
             })
         } else {
             None
