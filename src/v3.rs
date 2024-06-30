@@ -444,7 +444,7 @@ impl Client {
                         let client = client.clone();
                         let packet = publish.packet().clone();
                         ntex::rt::spawn(async move {
-                            let packet2 = packet.clone();
+                            let packet = packet.clone();
                             let now = timestamp_millis();
                             if let Ok(payload) =
                                 serde_json::from_slice::<serde_json::Value>(packet.payload.as_ref())
@@ -460,7 +460,7 @@ impl Client {
                                     );
                                 }
                             };
-                            client.mgr.on_message.fire((client.clone(), packet2));
+                            client.mgr.on_message.fire((client.clone(), packet));
                         });
                         Ready::Ok(publish.ack())
                     }
