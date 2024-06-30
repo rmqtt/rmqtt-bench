@@ -1,4 +1,5 @@
-use std::borrow::Cow;
+use crate::stats::{EndMillis, StartMillis};
+use crate::timestamp_millis;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -11,14 +12,15 @@ use ntex_mqtt::error::SendPacketError;
 use ntex_mqtt::v3::codec::SubscribeReturnCode;
 use ntex_mqtt::{self, v3};
 use parking_lot::{Mutex, RwLock};
+use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::spawn_local;
 use uuid::Uuid;
-use crate::stats::{EndMillis, StartMillis};
 
 use super::connector::ConnectorFactory;
 use super::Stats;
@@ -35,7 +37,7 @@ pub enum Message {
 pub struct Client {
     pub client_id: String,
     pub seq_no: String,
-    pub sink: Arc<RwLock<Option<v3::MqttSink>>>,
+    pub sink: Rc<RwLock<Option<v3::MqttSink>>>,
     pub mgr: ControlManager,
     ifaddr: Arc<RwLock<Option<String>>>,
     subs: Arc<AtomicUsize>,
@@ -60,7 +62,7 @@ impl Client {
         Self {
             client_id,
             seq_no,
-            sink: Arc::new(RwLock::new(None)),
+            sink: Rc::new(RwLock::new(None)),
             mgr,
             ifaddr: Arc::new(RwLock::new(None)),
             subs: Arc::new(AtomicUsize::new(0)),
@@ -235,7 +237,7 @@ impl Client {
                 let connect_enable = mgr.on_connect.fire(client.clone());
 
                 if connect_enable {
-                    let start = chrono::Local::now().timestamp_millis();
+                    let start = timestamp_millis();
                     match builder.connect().await {
                         Ok(c) => {
                             mgr.on_connected.fire(client.clone());
@@ -243,7 +245,7 @@ impl Client {
                             let sink = c.sink();
 
                             client.set_sink(sink.clone());
-                            let end = chrono::Local::now().timestamp_millis();
+                            let end = timestamp_millis();
                             Stats::instance().conns.inc2(start, end);
 
                             //subscribe
@@ -309,7 +311,7 @@ impl Client {
         client_id: String,
     ) {
         'subscribe: loop {
-            let start = chrono::Local::now().timestamp_millis();
+            let start = timestamp_millis();
             match sink
                 .subscribe()
                 .topic_filter(sub_topic.clone(), qos)
@@ -317,7 +319,7 @@ impl Client {
                 .await
             {
                 Ok(rets) => {
-                    let end = chrono::Local::now().timestamp_millis();
+                    let end = timestamp_millis();
                     for ret in rets {
                         if let SubscribeReturnCode::Failure = ret {
                             log::debug!("{:?} subscribe failure", client_id);
@@ -380,7 +382,11 @@ impl Client {
                 Cow::Owned("0".repeat(opts.pub_payload_len))
             };
 
-            let payload = format!("{{ \"data\": \"{}\", \"create_time\": {} }}", payload.as_str(), chrono::Local::now().timestamp_millis());
+            let payload = format!(
+                "{{ \"data\": \"{}\", \"create_time\": {} }}",
+                payload.as_str(),
+                timestamp_millis()
+            );
             let payload = ntex::util::Bytes::from(payload);
             if sink.is_open() {
                 let packet_id = c.gen_packet_id();
@@ -435,16 +441,27 @@ impl Client {
             .start(
                 move |control: v3::client::ControlMessage<()>| match control {
                     v3::client::ControlMessage::Publish(publish) => {
-                        let now = chrono::Local::now().timestamp_millis();
-                        let payload = serde_json::from_slice::<serde_json::Value>(publish.packet().payload.as_ref()).unwrap();
-                        let create_time = payload.as_object().and_then(|obj|{
-                            obj.get("create_time").map(|v|v.as_i64())
-                        }).unwrap().unwrap();
-                        Stats::instance().recvs.inc_limit_cost_times((Stats::instance().conns.value() * 2) as usize, create_time, now);
-                        client
-                            .mgr
-                            .on_message
-                            .fire((client.clone(), publish.packet().clone()));
+                        let client = client.clone();
+                        let packet = publish.packet().clone();
+                        ntex::rt::spawn(async move {
+                            let packet2 = packet.clone();
+                            let now = timestamp_millis();
+                            if let Ok(payload) =
+                                serde_json::from_slice::<serde_json::Value>(packet.payload.as_ref())
+                            {
+                                if let Some(create_time) = payload
+                                    .as_object()
+                                    .and_then(|obj| obj.get("create_time").and_then(|v| v.as_i64()))
+                                {
+                                    Stats::instance().recvs.inc_limit_cost_times(
+                                        (Stats::instance().conns.value() * 2) as usize,
+                                        create_time,
+                                        now,
+                                    );
+                                }
+                            };
+                            client.mgr.on_message.fire((client.clone(), packet2));
+                        });
                         Ready::Ok(publish.ack())
                     }
                     //                    #[allow(deprecated)]
@@ -484,5 +501,7 @@ impl Client {
 }
 
 fn parse_addr(addr: &str) -> anyhow::Result<SocketAddr> {
-    addr.to_socket_addrs()?.next().ok_or_else(|| anyhow::Error::msg("None"))
+    addr.to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow::Error::msg("None"))
 }
